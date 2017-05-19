@@ -43519,7 +43519,7 @@ var regl$1 = createCommonjsModule(function (module, exports) {
 	(global.createREGL = factory());
 }(commonjsGlobal, (function () { 'use strict';
 
-var arrayTypes =  {
+var arrayTypes = {
 	"[object Int8Array]": 5120,
 	"[object Int16Array]": 5122,
 	"[object Int32Array]": 5124,
@@ -44857,7 +44857,7 @@ function transpose (
   }
 }
 
-function wrapBufferState (gl, stats, config) {
+function wrapBufferState (gl, stats, config, attributeState) {
   var bufferCount = 0;
   var bufferSet = {};
 
@@ -45009,6 +45009,16 @@ function wrapBufferState (gl, stats, config) {
 
     var handle = buffer.buffer;
     check$1(handle, 'buffer must not be deleted already');
+
+    // fix dangling enabled vertex attrib arrays
+    for (var i = 0; i < attributeState.state.length; ++i) {
+      var binding = attributeState.state[i];
+      if (binding.buffer === buffer) {
+        gl.disableVertexAttribArray(i);
+        binding.buffer = null;
+      }
+    }
+
     gl.deleteBuffer(handle);
     buffer.buffer = null;
     delete bufferSet[buffer.id];
@@ -48337,7 +48347,6 @@ function wrapAttributeState (
   gl,
   extensions,
   limits,
-  bufferState,
   stringStore) {
   var NUM_ATTRIBUTES = limits.maxAttributes;
   var attributeBindings = new Array(NUM_ATTRIBUTES);
@@ -52455,14 +52464,13 @@ function wrapREGL (args) {
   };
 
   var limits = wrapLimits(gl, extensions);
-  var bufferState = wrapBufferState(gl, stats$$1, config);
-  var elementState = wrapElementsState(gl, extensions, bufferState, stats$$1);
   var attributeState = wrapAttributeState(
     gl,
     extensions,
     limits,
-    bufferState,
     stringStore);
+  var bufferState = wrapBufferState(gl, stats$$1, config, attributeState);
+  var elementState = wrapElementsState(gl, extensions, bufferState, stats$$1);
   var shaderState = wrapShaderState(gl, stringStore, stats$$1, config);
   var textureState = createTextureSet(
     gl,
@@ -53014,11 +53022,14 @@ function createContext (width, height, options) {
   canvas.height = height;
 
   try {
-    gl = canvas.getContext('experimental-webgl', options);
-  } catch (e) {}
-  try {
     gl = canvas.getContext('webgl', options);
-  } catch (e) {}
+  } catch (e) {
+    try {
+      gl = canvas.getContext('experimental-webgl', options);
+    } catch (e) {
+      return null
+    }
+  }
 
   var _getExtension = gl.getExtension;
   var extDestroy = {

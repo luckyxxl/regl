@@ -739,7 +739,7 @@ function transpose (
   }
 }
 
-function wrapBufferState (gl, stats, config) {
+function wrapBufferState (gl, stats, config, attributeState) {
   var bufferCount = 0;
   var bufferSet = {};
 
@@ -891,6 +891,16 @@ function wrapBufferState (gl, stats, config) {
 
     var handle = buffer.buffer;
     
+
+    // fix dangling enabled vertex attrib arrays
+    for (var i = 0; i < attributeState.state.length; ++i) {
+      var binding = attributeState.state[i];
+      if (binding.buffer === buffer) {
+        gl.disableVertexAttribArray(i);
+        binding.buffer = null;
+      }
+    }
+
     gl.deleteBuffer(handle);
     buffer.buffer = null;
     delete bufferSet[buffer.id];
@@ -4023,7 +4033,6 @@ function wrapAttributeState (
   gl,
   extensions,
   limits,
-  bufferState,
   stringStore) {
   var NUM_ATTRIBUTES = limits.maxAttributes;
   var attributeBindings = new Array(NUM_ATTRIBUTES);
@@ -7709,14 +7718,13 @@ function wrapREGL (args) {
   };
 
   var limits = wrapLimits(gl, extensions);
-  var bufferState = wrapBufferState(gl, stats$$1, config);
-  var elementState = wrapElementsState(gl, extensions, bufferState, stats$$1);
   var attributeState = wrapAttributeState(
     gl,
     extensions,
     limits,
-    bufferState,
     stringStore);
+  var bufferState = wrapBufferState(gl, stats$$1, config, attributeState);
+  var elementState = wrapElementsState(gl, extensions, bufferState, stats$$1);
   var shaderState = wrapShaderState(gl, stringStore, stats$$1, config);
   var textureState = createTextureSet(
     gl,
